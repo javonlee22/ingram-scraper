@@ -1,33 +1,28 @@
 import { Browser, Page, launch } from "puppeteer"
 import { writeFileSync as writeFile } from "fs"
-import dotenv from "dotenv"
+import { Product, ProductArrayPageFn, StringArrayPageFn } from "./types"
+import * as constants from "./constants"
 const json2xls = require("json2xls")
 
-dotenv.config()
-
-interface Product {
-  vpn: string
-  msrp: number
-  vendorPrice: number
-  discount?: number
-  stock: number
-  sku: string
-  upc: string
-  shortDescription?: string
-  longDescription?: string
-}
-
-type StringArrayPageFn = (selector: string) => string[]
-
-const EMAIL: string = process.env.EMAIL ?? ""
-const PASSWORD: string = process.env.PASSWORD ?? ""
-const BASE_URL: string = "https://usa.ingrammicro.com"
-const BASE_PRODUCT_URL = "https://usa.ingrammicro.com/Site/Search#"
-const productRowSelector = "div.row.product"
-
-if (EMAIL === "" || PASSWORD === "") {
+if (constants.EMAIL === "" || constants.PASSWORD === "") {
   console.error("No username/password environment variables found.")
   process.exit(1)
+}
+
+function extractPrice(data: string): number | null {
+  let regExpArray: RegExpExecArray | null = constants.priceRegExp.exec(data)
+  if (regExpArray) {
+    return parseFloat(regExpArray[0])
+  }
+  return null
+}
+
+function extractInteger(data: string): string {
+  let regExpArray: RegExpExecArray | null = constants.integerRegExp.exec(data)
+  if (regExpArray) {
+    return regExpArray[0]
+  }
+  return data
 }
 
 /**
@@ -53,9 +48,9 @@ const login = async (page: Page) => {
   })
   await page.waitForSelector(usernameSelector)
   await page.click(usernameSelector)
-  await page.keyboard.type(EMAIL)
+  await page.keyboard.type(constants.EMAIL)
   await page.click(passwordSelector)
-  await page.keyboard.type(PASSWORD)
+  await page.keyboard.type(constants.PASSWORD)
   await page.click(submitSelector)
   await page.waitForNavigation()
 }
@@ -80,47 +75,42 @@ async function extractCategories(page: Page): Promise<string[]> {
   }, categoryDivSelector)
 }
 
-/**
- *
- * @param page - Puppeteer Page object
- * @param selector - CSS selector string
- * @returns Promise conataining an Array of product href strings
- */
-async function extractPageProductLinks(
-  page: Page,
-  selector: string
-): Promise<string[]> {
-  // Extract all product links on page
-  return await page.evaluate<StringArrayPageFn>((selector) => {
-    const productLinkSelector: string = 'a[data-name="search_result_link"]'
-    return Array.from(document.querySelectorAll(selector))
-      .filter((element) => element.querySelector(productLinkSelector) !== null)
-      .map((productRow) => {
-        const productLinkElement = productRow.querySelector(
-          productLinkSelector
-        )!
-        return productLinkElement.getAttribute("href")!
-      })
-  }, selector)
-}
+// TODO: Test all field extractions
 
 /**
  *
  * @param page - Puppeteer Page object
- * @param hrefs - Array of href strings
  * @returns Promise containing an Array of Product objects for a given page
  */
-async function extractPageProductsInfo(
-  page: Page,
-  hrefs: string[]
-): Promise<Product[]> {
-  hrefs.forEach(async (href) => {
-    const productUrl = BASE_URL + href
-    page.goto(productUrl, { waitUntil: "networkidle2" })
-    await page.waitForSelector("#imgProductDetails")
-    page.goBack({ waitUntil: "networkidle2" })
-  })
-  return [] as Product[]
+async function extractPageProductsInfo(page: Page): Promise<Product[]> {
+  return await page.evaluate<ProductArrayPageFn>((selector) => {
+    return Array.from(
+      document.querySelectorAll(selector.productRow)
+    ).map<Product>((el) => {
+      let url = el.querySelector(selector.shortDescription)?.textContent!
+      let sku = el.querySelector(selector.sku)?.textContent!
+      let vpn = el.querySelector(selector.vpn)?.textContent!
+      let upc = el.querySelector(selector.upc)?.textContent!
+      let msrp = extractPrice(el.querySelector(selector.msrp)?.textContent!)!
+      let vendorPrice = extractPrice(
+        el.querySelector(selector.listPrice)?.textContent!
+      )!
+      let stock = extractInteger(el.querySelector(selector.stock)?.textContent!)
+      let shortDescription = el
+        .querySelector(selector.url)
+        ?.getAttribute("title")!
+      return {
+        url,
+        sku,
+        vpn,
+        upc,
+        msrp,
+        vendorPrice,
+        stock,
+        shortDescription,
+      }
+    })
+  }, constants.selectorMap as any)
 }
 
 /**
@@ -133,8 +123,25 @@ async function extractCategoryProducts(
   page: Page,
   category: string
 ): Promise<Product[]> {
-  let productHrefs = await extractPageProductLinks(page, productRowSelector)
-  return [] as Product[]
+  const categoryCheckboxSelector = `#${category}`
+  const nextArrowSelector = "#nextPage"
+  await page.click(categoryCheckboxSelector)
+  await page.waitForNavigation()
+  let products: Product[] = []
+  do {
+    try {
+      page.waitForSelector(nextArrowSelector)
+    } catch (error) {
+      break
+    }
+    let pageProducts = await extractPageProductsInfo(page)
+    products.push(...pageProducts)
+    await page.click(nextArrowSelector)
+    await page.waitForNavigation()
+  } while (true)
+  await page.click(categoryCheckboxSelector)
+  await page.waitForNavigation()
+  return products
 }
 
 /**
@@ -144,11 +151,11 @@ async function extractCategoryProducts(
  */
 async function extractAllProducts(page: Page): Promise<Product[]> {
   let products: Product[] = []
-  // Wait for search base product page to load
-  await page.goto(BASE_PRODUCT_URL, {
+  // Wait for search base product page to loåad
+  await page.goto(constants.BASE_PRODUCT_URL, {
     waitUntil: "networkidle2",
   })
-  await page.waitForSelector(productRowSelector)
+  await page.waitForSelector(constants.productRowSelector)
 
   // Extract all categories
   let categories = await extractCategories(page)
@@ -156,7 +163,7 @@ async function extractAllProducts(page: Page): Promise<Product[]> {
   for (let c of categories) {
     console.log(`Scraping ${c} category...`)
     let categoryProducts = await extractCategoryProducts(page, c)
-    products = products.concat(categoryProducts)
+    products.push(...categoryProducts)
   }
 
   await page.close()
