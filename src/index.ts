@@ -9,6 +9,11 @@ if (constants.EMAIL === "" || constants.PASSWORD === "") {
   process.exit(1)
 }
 
+/**
+ * Searches a string for price data
+ *
+ * @param data - String to be searched
+ */
 function extractPrice(data: string): number | null {
   let regExpArray: RegExpExecArray | null = constants.priceRegExp.exec(data)
   if (regExpArray) {
@@ -17,6 +22,11 @@ function extractPrice(data: string): number | null {
   return null
 }
 
+/**
+ * Searches a string for integer data
+ *
+ * @param data - String to be searched
+ */
 function extractInteger(data: string): string {
   let regExpArray: RegExpExecArray | null = constants.integerRegExp.exec(data)
   if (regExpArray) {
@@ -35,6 +45,7 @@ async function init(): Promise<Browser> {
 }
 
 /**
+ * Log into the website to view all product listing information
  *
  * @param page - Puppeteer Page object
  */
@@ -56,6 +67,7 @@ async function login(page: Page) {
 }
 
 /**
+ * Extracts all product categories
  *
  * @param page - Puppeteer Page object
  * @returns Promise containing an Array of category strings
@@ -76,6 +88,7 @@ async function extractCategories(page: Page): Promise<string[]> {
 }
 
 /**
+ *  Extracts relevant data from all product listings on the current page
  *
  * @param page - Puppeteer Page object
  * @returns Promise containing an Array of Product objects for a given page
@@ -152,6 +165,7 @@ async function extractCategoryProducts(
 }
 
 /**
+ * Startst the process of extracting all relevant products from the website
  *
  * @param page - Puppeteer Page object
  * @returns - Promise containing an Array of all Product objects
@@ -177,6 +191,12 @@ async function extractAllProducts(page: Page): Promise<Product[]> {
   return products
 }
 
+/**
+ * Takes an array of products and writes them to an excel file
+ *
+ * @param products - Puppeteer Page object
+ * @param filename - Name of the file
+ */
 function writeToExcel(products: Product[], filename: string) {
   const xls = json2xls(products)
   writeFile(filename, xls, { encoding: "binary" })
