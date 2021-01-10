@@ -38,7 +38,7 @@ async function init(): Promise<Browser> {
  *
  * @param page - Puppeteer Page object
  */
-const login = async (page: Page) => {
+async function login(page: Page) {
   const usernameSelector: string = "#okta-signin-username"
   const passwordSelector: string = "#okta-signin-password"
   const submitSelector: string = "#okta-signin-submit"
@@ -75,30 +75,31 @@ async function extractCategories(page: Page): Promise<string[]> {
   }, categoryDivSelector)
 }
 
-// TODO: Test all field extractions
-
 /**
  *
  * @param page - Puppeteer Page object
  * @returns Promise containing an Array of Product objects for a given page
  */
 async function extractPageProductsInfo(page: Page): Promise<Product[]> {
-  return await page.evaluate<ProductArrayPageFn>((selector) => {
+  await page.waitForSelector(constants.selectorMap.productRow, {
+    visible: true,
+  })
+  await page.waitForSelector(constants.selectorMap.listPrice, { visible: true })
+  let products = await page.evaluate<ProductArrayPageFn>((selector) => {
     return Array.from(
       document.querySelectorAll(selector.productRow)
     ).map<Product>((el) => {
-      let url = el.querySelector(selector.shortDescription)?.textContent!
+      // TODO: Figure out why the prices aren't being found by the query selector
+
+      let url = el.querySelector(selector.url)?.getAttribute("href")!
       let sku = el.querySelector(selector.sku)?.textContent!
       let vpn = el.querySelector(selector.vpn)?.textContent!
       let upc = el.querySelector(selector.upc)?.textContent!
-      let msrp = extractPrice(el.querySelector(selector.msrp)?.textContent!)!
-      let vendorPrice = extractPrice(
-        el.querySelector(selector.listPrice)?.textContent!
-      )!
-      let stock = extractInteger(el.querySelector(selector.stock)?.textContent!)
-      let shortDescription = el
-        .querySelector(selector.url)
-        ?.getAttribute("title")!
+      let msrp = el.querySelector(selector.msrp)?.innerHTML!
+      let vendorPrice = el.querySelector(selector.listPrice)?.textContent!
+      let stock = el.querySelector(selector.stock)?.textContent!
+      let shortDescription = el.querySelector(selector.shortDescription)
+        ?.textContent!
       return {
         url,
         sku,
@@ -111,6 +112,13 @@ async function extractPageProductsInfo(page: Page): Promise<Product[]> {
       }
     })
   }, constants.selectorMap as any)
+  console.log(products)
+  products.forEach((p) => {
+    p.msrp = extractPrice(p.msrp as string)!
+    p.vendorPrice = extractPrice(p.vendorPrice as string)!
+    p.stock = extractInteger(p.stock as string)!
+  })
+  return products
 }
 
 /**
@@ -123,24 +131,23 @@ async function extractCategoryProducts(
   page: Page,
   category: string
 ): Promise<Product[]> {
-  const categoryCheckboxSelector = `#${category}`
+  const categoryCheckboxSelector = `input[id='${category}']`
   const nextArrowSelector = "#nextPage"
   await page.click(categoryCheckboxSelector)
   await page.waitForNavigation()
   let products: Product[] = []
   do {
     try {
-      page.waitForSelector(nextArrowSelector)
+      page.waitForSelector(nextArrowSelector, { visible: true })
     } catch (error) {
       break
     }
     let pageProducts = await extractPageProductsInfo(page)
     products.push(...pageProducts)
     await page.click(nextArrowSelector)
-    await page.waitForNavigation()
+    await page.waitForTimeout(5000)
   } while (true)
   await page.click(categoryCheckboxSelector)
-  await page.waitForNavigation()
   return products
 }
 

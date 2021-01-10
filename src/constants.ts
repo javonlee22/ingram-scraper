@@ -13,12 +13,12 @@ export const integerRegExp: RegExp = new RegExp(/^[-+]?\d+$/)
 
 export const selectorMap: SelectorMap = {
   productRow: productRowSelector,
-  shortDescription: "a.js-adobe-tracking",
+  shortDescription: "a.js-adobe-tracking span",
   sku: ".sku",
   vpn: ".vpn",
-  msrp: ".msrp > span:last-child",
-  listPrice: ".panda-price",
+  msrp: "p.msrp span.display-block",
+  listPrice: "p.panda-price",
   upc: ".product.info.ean.show",
-  stock: ".stockinformation",
-  url: 'a[data-name="search_result_link"]',
+  stock: "a.stockinformation",
+  url: "a.js-adobe-tracking",
 }

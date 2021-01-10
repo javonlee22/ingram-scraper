@@ -1,12 +1,12 @@
 export interface Product {
   vpn: string
-  msrp: number
-  vendorPrice: number
+  msrp: number | string
+  vendorPrice: number | string
   discount?: number
   stock: number | string
   sku: string
   upc: string
-  shortDescription?: string
+  shortDescription: string
   longDescription?: string
   url: string
 }
