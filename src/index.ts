@@ -13,6 +13,7 @@ if (constants.EMAIL === "" || constants.PASSWORD === "") {
  * Searches a string for price data
  *
  * @param data - String to be searched
+ * @returns Price in decimal format or null
  */
 function extractPrice(data: string): number | null {
   let regExpArray: RegExpExecArray | null = constants.priceRegExp.exec(data)
@@ -26,6 +27,7 @@ function extractPrice(data: string): number | null {
  * Searches a string for integer data
  *
  * @param data - String to be searched
+ * @returns An integer or null
  */
 function extractInteger(data: string): string {
   let regExpArray: RegExpExecArray | null = constants.integerRegExp.exec(data)
